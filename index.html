@@ -92,6 +92,24 @@
   .addcat{margin-top:4px; background:transparent; border:1px solid var(--line2); color:var(--txt); font-family:inherit; font-weight:700; padding:14px; border-radius:24px; width:100%; cursor:pointer; font-size:13px; transition:.15s;}
   .addcat:hover{border-color:var(--green); color:var(--green);}
 
+  .goal{background:var(--elev); border-radius:14px; margin-bottom:12px; padding:16px 18px; transition:background .15s;}
+  .goal:hover{background:#1c1c1c;}
+  .goal-head{display:flex; align-items:center; gap:11px; margin-bottom:14px;}
+  .goal-name-edit{background:transparent; border:none; color:var(--txt); font-weight:700; font-size:16px; outline:none; padding:2px 0; border-bottom:1px solid transparent; flex:1; min-width:0;}
+  .goal-name-edit:focus{border-bottom-color:var(--line2);}
+  .goal-done{font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--green); background:#1ed7601f; padding:4px 9px; border-radius:20px; flex:none;}
+  .gtrack{height:9px; border-radius:6px; background:var(--elev3); overflow:hidden; margin-bottom:13px;}
+  .gfill{height:100%; border-radius:6px; transition:width .4s cubic-bezier(.4,0,.2,1);}
+  .goal-nums{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+  .gfield{display:flex; align-items:baseline; gap:6px;}
+  .gfield .gk{font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);}
+  .gmoney{display:flex; align-items:center; gap:4px; background:var(--elev2); border:1px solid transparent; border-radius:20px; padding:0 11px;}
+  .gmoney:focus-within{border-color:var(--green);}
+  .gmoney .csym{font-size:11px; color:var(--faint); font-weight:600;}
+  .gmoney input{background:transparent; border:none; color:var(--txt); font-family:inherit; font-size:14px; font-weight:700; outline:none; padding:7px 0; width:84px; text-align:right;}
+  .goal-pct{font-size:13px; font-weight:800; color:var(--green); margin-left:auto;}
+  .goal-left{font-size:11px; font-weight:600; color:var(--faint); width:100%;}
+
   .month-card{background:var(--elev); border-radius:16px; padding:22px 24px 18px; margin-top:14px;}
   .month-top{margin-bottom:18px;}
   .month-top h3{font-size:16px; font-weight:800;}
@@ -148,6 +166,10 @@
   <div id="catList"></div>
   <button class="addcat" id="addCat">+ Add category</button>
 
+  <div class="sec"><span class="bar-i"></span>Savings goals</div>
+  <div id="goalList"></div>
+  <button class="addcat" id="addGoal">+ Add goal</button>
+
   <div class="month-card">
     <div class="month-top"><h3>Spending by month</h3><p>New months start on their own. Tap any bar to view &amp; edit that month.</p></div>
     <div class="chart" id="chart"></div>
@@ -161,6 +183,7 @@
   const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   let colorIdx=3, selectedKey, currency='MAD';
   let months={};   // { 'YYYY-MM': { salary, cats:[{name,color,items:[{n,p}]}] } }
+  let goals=[];    // [{name,color,target,saved}] — global, persists across months
 
   function key(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
   function curKey(){return key(new Date());}
@@ -177,11 +200,11 @@
   }
 
   function load(){
-    try{const r=localStorage.getItem(MK); if(r){const d=JSON.parse(r); months=d.months||{}; currency=d.currency||'MAD'; colorIdx=d.colorIdx||3;}}catch(e){}
+    try{const r=localStorage.getItem(MK); if(r){const d=JSON.parse(r); months=d.months||{}; currency=d.currency||'MAD'; colorIdx=d.colorIdx||3; goals=d.goals||[];}}catch(e){}
     ensureCurrentMonth();
     selectedKey=curKey();
   }
-  function save(){try{localStorage.setItem(MK,JSON.stringify({months,currency,colorIdx}));}catch(e){}}
+  function save(){try{localStorage.setItem(MK,JSON.stringify({months,currency,colorIdx,goals}));}catch(e){}}
 
   // auto-create the current calendar month, carrying over last month's plan
   function ensureCurrentMonth(){
@@ -239,7 +262,37 @@
       });
       catList.appendChild(el);
     });
+    renderGoals();
     summarize();
+  }
+
+  function renderGoals(){
+    const gl=document.getElementById('goalList'); gl.innerHTML='';
+    const sym=symbols[currency];
+    goals.forEach((g,gi)=>{
+      const target=parseFloat(g.target)||0, saved=parseFloat(g.saved)||0;
+      const pct=target>0?Math.min(100,Math.round(saved/target*100)):0;
+      const done=target>0&&saved>=target;
+      const remaining=Math.max(0,target-saved);
+      const el=document.createElement('div'); el.className='goal';
+      el.innerHTML=`
+        <div class="goal-head">
+          <span class="swatch" style="background:${g.color}" data-gsw="${gi}" title="Change color"></span>
+          <input class="goal-name-edit" value="${esc(g.name)}" data-gname="${gi}" placeholder="Goal name">
+          ${done?'<span class="goal-done">Reached 🎉</span>':''}
+          <button class="trash" data-gdel="${gi}" title="Delete goal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M10 11v6M14 11v6"/></svg></button>
+        </div>
+        <div class="gtrack"><div class="gfill" style="width:${pct}%; background:${g.color}"></div></div>
+        <div class="goal-nums">
+          <div class="gfield"><span class="gk">Saved</span>
+            <div class="gmoney"><span class="csym">${sym}</span><input class="num" type="number" inputmode="decimal" placeholder="0" value="${g.saved}" data-gsaved="${gi}"></div></div>
+          <div class="gfield"><span class="gk">Target</span>
+            <div class="gmoney"><span class="csym">${sym}</span><input class="num" type="number" inputmode="decimal" placeholder="0" value="${g.target}" data-gtarget="${gi}"></div></div>
+          <span class="goal-pct" data-gpct="${gi}" style="color:${done?'var(--green)':'var(--muted)'}">${pct}%</span>
+          <span class="goal-left" data-gleft="${gi}">${done?'Goal reached — nicely done.':remaining>0?fmt(remaining)+' to go':'Set a target to track progress'}</span>
+        </div>`;
+      gl.appendChild(el);
+    });
   }
 
   function summarize(){
@@ -296,6 +349,28 @@
     else if(t.dataset.sw!==undefined){const c=M().cats[t.dataset.sw]; const i=palette.indexOf(c.color); c.color=palette[(i+1)%palette.length]; build();}
   });
   document.getElementById('addCat').addEventListener('click',()=>{M().cats.push({name:'New category',color:palette[colorIdx++%palette.length],items:[{n:'',p:''}]}); build();});
+
+  const goalList=document.getElementById('goalList');
+  goalList.addEventListener('input',e=>{
+    const t=e.target;
+    if(t.dataset.gname!==undefined){goals[t.dataset.gname].name=t.value; save();}
+    else if(t.dataset.gsaved!==undefined||t.dataset.gtarget!==undefined){
+      const gi=t.dataset.gsaved!==undefined?t.dataset.gsaved:t.dataset.gtarget;
+      if(t.dataset.gsaved!==undefined)goals[gi].saved=t.value; else goals[gi].target=t.value;
+      const g=goals[gi], target=parseFloat(g.target)||0, saved=parseFloat(g.saved)||0;
+      const pct=target>0?Math.min(100,Math.round(saved/target*100)):0, done=target>0&&saved>=target;
+      const fill=goalList.querySelector(`.goal:nth-child(${+gi+1}) .gfill`); if(fill)fill.style.width=pct+'%';
+      const pe=goalList.querySelector(`[data-gpct="${gi}"]`); if(pe){pe.textContent=pct+'%'; pe.style.color=done?'var(--green)':'var(--muted)';}
+      const le=goalList.querySelector(`[data-gleft="${gi}"]`); if(le)le.textContent=done?'Goal reached — nicely done.':target>saved?fmt(target-saved)+' to go':'Set a target to track progress';
+      save();
+    }
+  });
+  goalList.addEventListener('click',e=>{
+    const t=e.target.closest('[data-gdel],[data-gsw]'); if(!t)return;
+    if(t.dataset.gdel!==undefined){goals.splice(t.dataset.gdel,1); renderGoals();}
+    else if(t.dataset.gsw!==undefined){const g=goals[t.dataset.gsw]; const i=palette.indexOf(g.color); g.color=palette[(i+1)%palette.length]; renderGoals(); save();}
+  });
+  document.getElementById('addGoal').addEventListener('click',()=>{goals.push({name:'New goal',color:palette[colorIdx++%palette.length],target:'',saved:''}); renderGoals(); save();});
   document.getElementById('chart').addEventListener('click',e=>{const col=e.target.closest('.mbar-col'); if(col){selectedKey=col.dataset.month; build(); window.scrollTo({top:0,behavior:'smooth'});}});
   document.getElementById('toCurrent').addEventListener('click',()=>{selectedKey=curKey(); build(); window.scrollTo({top:0,behavior:'smooth'});});
   salaryEl.addEventListener('input',()=>{M().salary=Math.max(0,parseFloat(salaryEl.value)||0); summarize();});
